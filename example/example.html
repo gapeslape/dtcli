@@ -1,0 +1,20 @@
+{% extends 'assets/base.html' %}
+{% load dtcli %}
+
+{# 
+	dtcli adds minify tag which is an extension of include
+	tag and adds on top of it minifying of js and css files.
+
+	File type is guessed from file extension, you can use
+	type=<file_type> to specify file type by hand. type 
+	parameter has to be specified before with parameter.
+#}
+
+{% block css %}
+	{% minify 'assets/css/example.css' type=css %}
+{% endblock %}
+
+{% block js %}
+	{% minify 'assets/js/example.js' with text='look into javascript console to see this message'%}
+{% endblock %}
+

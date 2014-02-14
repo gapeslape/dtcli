@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+import os, os.path, errno, sys, optparse
+
+from django.conf import settings
+from django.template import Context, Template
+from django.template.loader import get_template
+
+def main():
+	parser = optparse.OptionParser()
+
+	parser.add_option('-d', '--template-dir', action='append', dest='tdirs', 
+		help='add template directory (default is current path')
+	parser.add_option('-o', '--output-dir', dest='outputdir', default='build',
+		help='specify output directory (default is build)')
+	parser.add_option('-p', '--context-parameter', action='append', dest='context',
+		help='add context parameter in the form PARAM_NAME=PARAM_VALUE')
+
+	options, args = parser.parse_args()
+
+	template_dirs = []
+	for tdir in options.tdirs or ['.']:
+			template_dirs.append(os.path.abspath(tdir))
+
+	context = {}
+	for context_inp in options.context or []:
+		name, value = context_inp.split('=')
+		context[name] = value
+
+	settings.configure(TEMPLATE_DEBUG=True, TEMPLATE_DIRS=template_dirs, INSTALLED_APPS=('tags',))
+
+	for fn in args:
+		process_file(fn, options.outputdir, context)
+
+def process_file(filename, outputdir, context):
+
+	template=get_template(filename)
+	context = Context(context)
+
+	render = template.render(context)
+
+	if not os.path.exists(outputdir):
+		mkdir_p(outputdir)
+
+	outputfn = os.path.join(outputdir, filename)
+	outputdir = os.path.dirname(outputfn)
+	mkdir_p(outputdir)
+
+	outf = open(outputfn, 'w')
+	outf.write(render)
+	outf.close()
+
+def mkdir_p(path):
+	try:
+		os.makedirs(path)
+	except OSError as exc: # Python >2.5
+		if exc.errno == errno.EEXIST and os.path.isdir(path):
+			pass
+		else: raise
+
+if __name__ == '__main__':
+	main()
