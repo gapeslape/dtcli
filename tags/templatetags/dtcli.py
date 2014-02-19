@@ -1,3 +1,4 @@
+import os.path, sys
 from subprocess import Popen, PIPE
 
 from django.template.loader import find_template, get_template
@@ -10,9 +11,40 @@ from django.utils import six
 
 register = template.Library()
 
-class MinifyIncludeNode(IncludeNode):
-	def __init__(self, template_type, *args, **kwargs):
+class LessIncludeNode(IncludeNode):
+	def __init__(self, template_type, template_filename, *args, **kwargs):
 		self.template_type = template_type
+		self.template_filename = template_filename
+		super(LessIncludeNode, self).__init__(*args, **kwargs)
+
+	def render(self, context):
+		result = super(LessIncludeNode, self).render(context)
+
+		less_directory = os.path.dirname(self.template_filename)
+
+		if self.template_type == 'less':
+			self.template_type = 'css'
+
+		yuicompressor = Popen(['yuicompressor', '--type=%s' % self.template_type], stdout=PIPE, stdin=PIPE)
+		lessc = Popen(['lessc', '-', '--include-path=.:%s' % less_directory], stdout=yuicompressor.stdin, stdin=PIPE, stderr=PIPE)
+
+		lessc.stdin.write(result)
+		lessc.stdin.close()
+		
+		# this is tu surpress annoying message
+		for line in lessc.stderr.readlines():
+			if line.startswith('util.print:'):
+				continue
+			sys.stderr.write(line)
+
+		yuicompressor.stdin.close()
+
+		return yuicompressor.stdout.read()
+
+class MinifyIncludeNode(IncludeNode):
+	def __init__(self, template_type, template_filename, *args, **kwargs):
+		self.template_type = template_type
+		self.template_filename = template_filename
 		super(MinifyIncludeNode, self).__init__(*args, **kwargs)
 
 	def render(self, context):
@@ -27,6 +59,13 @@ class MinifyIncludeNode(IncludeNode):
 
 @register.tag(name='minify')
 def do_minify(parser, token):
+	return _do_include(parser, token, MinifyIncludeNode)
+
+@register.tag(name='less')
+def do_less(parser, token):
+	return _do_include(parser, token, LessIncludeNode)
+
+def _do_include(parser, token, _class):
 	"""
     Loads a template and renders it with the current context. You can pass
     additional context using keyword arguments.
@@ -71,8 +110,9 @@ def do_minify(parser, token):
 	isolated_context = options.get('only', False)
 	namemap = options.get('with', {})
 
+	template_filename = str(bits[1]).replace("'", '').replace('"', '')
 	if not template_type:
-		template_type = str(bits[1]).replace("'", '').replace('"', '').split('.')[-1]
+		template_type = template_filename.split('.')[-1]
 
-	return MinifyIncludeNode(template_type, parser.compile_filter(bits[1]), extra_context=namemap,
+	return _class(template_type, template_filename, parser.compile_filter(bits[1]), extra_context=namemap,
                        isolated_context=isolated_context)
