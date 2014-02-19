@@ -20,13 +20,11 @@ class LessIncludeNode(IncludeNode):
 	def render(self, context):
 		result = super(LessIncludeNode, self).render(context)
 
-		less_directory = os.path.dirname(self.template_filename)
-
 		if self.template_type == 'less':
 			self.template_type = 'css'
 
 		yuicompressor = Popen(['yuicompressor', '--type=%s' % self.template_type], stdout=PIPE, stdin=PIPE)
-		lessc = Popen(['lessc', '-', '--include-path=.:%s' % less_directory], stdout=yuicompressor.stdin, stdin=PIPE, stderr=PIPE)
+		lessc = Popen(['lessc', '-', '--include-path=%s' % ':'.join(settings.TEMPLATE_DIRS)], stdout=yuicompressor.stdin, stdin=PIPE, stderr=PIPE)
 
 		lessc.stdin.write(result)
 		lessc.stdin.close()
